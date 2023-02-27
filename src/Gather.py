@@ -33,11 +33,11 @@ class Gather(Core.Model):
 
     seed = None
 
-    default_resource_distribution = [0.7, 0.15, 0.1, 0.05]
+    default_resource_distribution = [0.0, 0.7, 0.2, 0.1]
     default_index_names = ['void', 'rock', 'iron', 'gold']
 
-    def __init__(self, env_size : int, home_size : int, resource_distribution : list = None,
-                 index_names : list = None, seed : int = None):
+    def __init__(self, env_size : int, home_size : int, deposit_rate : float, decay_rate : float,
+                 resource_distribution : list = None, index_names : list = None, seed : int = None):
         """ Initializes class and creates GridWorld Environment of width AND height = size.
             Adds RESOURCES and HOME cell to the environment '"""
         super().__init__(seed = seed if seed is None else Gather.seed)
@@ -84,7 +84,9 @@ class Gather(Core.Model):
                                                            resource_distribution, index_names))
 
         # Add Systems
-        self.systems.add_system(Agents.RandomMovementSystem('RMS', self))
+        # self.systems.add_system(Agents.RandomMovementSystem('RMS', self))
+        self.systems.add_system(Agents.PheromoneMovementSystem('PMS', self))
+        self.systems.add_system(Agents.PheromoneDepositSystem('PDS', self, deposit_rate, decay_rate))
 
         # Will generate a figure of the environment.
         # fig, ax = plt.subplots()
@@ -120,3 +122,4 @@ class EnvResourceComponent(Core.Component):
         self.home = (home_x, home_y)
         self.resource_distribution = resource_distribution
         self.index_names = index_names
+        self.resources = 0
