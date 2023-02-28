@@ -1,5 +1,6 @@
 import ECAgent.Core as Core
 import ECAgent.Environments as ENV
+import numpy as np
 
 import src.Gather as GATHER
 
@@ -27,6 +28,19 @@ class ModeComponent(Core.Component):
         self.last_loc = None
 
 
+class PheromoneComponent(Core.Component):
+    def __init__(self, agent : Core.Agent, model: Core.Model):
+        super().__init__(agent, model)
+        self.f_pheromones = np.zeros(model.environment.width ** 2)
+        self.h_pheromones = np.zeros(model.environment.width ** 2)
+
+
+class PheromoneCommunicationComponent(Core.Component):
+    def __init__(self, agent : Core.Agent, model: Core.Model, communication_network):
+        super().__init__(agent, model)
+        self.communication_network = communication_network
+
+
 class BaseAgent(Core.Agent):
     """Base Class for all GATHER Agents.
         Class adds a ResourceComponent to the agent."""
@@ -44,6 +58,7 @@ class AntAgent(Core.Agent):
         super().__init__(id, model)
         self.add_component(ResourceComponent(self, model))
         self.add_component(ModeComponent(self, model))
+        self.add_component(PheromoneComponent(self, model))
 
 
 class RandomMovementSystem(Core.System):
@@ -58,28 +73,29 @@ class RandomMovementSystem(Core.System):
             self.model.environment.move(agent, *move_dir)
 
 
+class CostSystem(Core.System):
+    def __init__(self, id: str, model: Core.Model, cost, cost_frequency):
+        super().__init__(id, model, frequency=cost_frequency)
+        self.cost = cost
+
+    def execute(self):
+        for agent in self.model.environment:
+            agent[ResourceComponent].wealth = max(agent[ResourceComponent].wealth - 1, 0)
+
+        self.model.reset()
+
+
 class PheromoneMovementSystem(Core.System):
 
-    HOME_KEY = 'h_pheromones'
-    FOOD_KEY = 'f_pheromones'
-
-    def __init__(self, id: str, model: Core.Model, agent_random_chance : float = 0.05):
+    def __init__(self, id: str, model: Core.Model, communication_network, agent_random_chance : float = 0.05):
         super().__init__(id, model)
         self.agent_random_chance = agent_random_chance
-
-        # Add Pheromone layers
-        generator = ENV.ConstantGenerator(0.0)
-        model.environment.addCellComponent(PheromoneMovementSystem.FOOD_KEY, generator)
-        model.environment.addCellComponent(PheromoneMovementSystem.HOME_KEY, generator)
+        self.model.environment.add_component(PheromoneCommunicationComponent(self.model.environment, self.model,
+                                                                             communication_network))
 
     def execute(self):
 
-        # Get resources data
-        fcells = self.model.environment.cells[PheromoneMovementSystem.FOOD_KEY].to_numpy()
-        hcells = self.model.environment.cells[PheromoneMovementSystem.HOME_KEY].to_numpy()
-
         resource_cells = self.model.environment.cells[GATHER.Gather.RESOURCE_KEY]
-
         for agent in self.model.environment:
 
             # Agents can move up, down , left and right. This is equivalent to searching their neumann neighbourhood.
@@ -108,6 +124,16 @@ class PheromoneMovementSystem(Core.System):
             elif self.model.random.random() < self.agent_random_chance:  # Random Move
                 new_pos = self.model.random.choice(candidate_cells)
             else:
+
+                # Calculate agent's pheromone representation
+                fcells = np.zeros(self.model.environment.width ** 2)
+                hcells = np.zeros(self.model.environment.width ** 2)
+                for other in self.model.environment:
+                    fcells += other[PheromoneComponent].f_pheromones * self.model.environment[
+                        PheromoneCommunicationComponent].communication_network[agent.id][other.id]
+                    hcells += other[PheromoneComponent].h_pheromones * self.model.environment[
+                        PheromoneCommunicationComponent].communication_network[agent.id][other.id]
+
                 tcells = hcells if agent[ModeComponent].home else fcells
                 pheromones = [tcells[c] for c in cell_ids]
 
@@ -146,15 +172,15 @@ class PheromoneDepositSystem(Core.System):
 
 
     def execute(self):
-        # Get resources data
-        fcells = self.model.environment.cells[PheromoneMovementSystem.FOOD_KEY].to_numpy() * self.decay_rate
-        hcells = self.model.environment.cells[PheromoneMovementSystem.HOME_KEY].to_numpy() * self.decay_rate
         resource_cells = self.model.environment.cells[GATHER.Gather.RESOURCE_KEY].to_numpy()
 
-        fcells[fcells < 0.001] = 0.0
-        hcells[hcells < 0.001] = 0.0
-
         for agent in self.model.environment:
+
+            agent[PheromoneComponent].f_pheromones *= self.decay_rate
+            agent[PheromoneComponent].h_pheromones *= self.decay_rate
+
+            agent[PheromoneComponent].f_pheromones[agent[PheromoneComponent].f_pheromones < 0.001] = 0.0
+            agent[PheromoneComponent].h_pheromones[agent[PheromoneComponent].h_pheromones < 0.001] = 0.0
 
             pos_id = ENV.discrete_grid_pos_to_id(agent[ENV.PositionComponent].x, agent[ENV.PositionComponent].y,
                                         self.model.environment.width)
@@ -166,7 +192,7 @@ class PheromoneDepositSystem(Core.System):
                     self.model.environment[GATHER.EnvResourceComponent].resources += agent[ResourceComponent].resources  # Keep track of total resources carried
                     agent[ResourceComponent].resources = 0  # Reset carrying of resources
 
-                fcells[pos_id] += self.deposit_rate  # Update food pheromone
+                agent[PheromoneComponent].f_pheromones[pos_id] += self.deposit_rate  # Update food pheromone
 
             elif resource_cells[pos_id] > 1:  # Note: empty cells are assumed to have an id of 1.
                 resource_cells[pos_id] = 1  # Empty the resources (1 is void).
@@ -174,13 +200,7 @@ class PheromoneDepositSystem(Core.System):
                 agent[ResourceComponent].resources += 1
                 # Change agent's last loc to its current location so it can turn around.
                 agent[ModeComponent].last_loc = agent[ENV.PositionComponent].xyz()
-                hcells[pos_id] += self.deposit_rate
+                agent[PheromoneComponent].h_pheromones[pos_id] += self.deposit_rate
 
             else:  # If agent is looking for food and didn't find any.
-                hcells[pos_id] += self.deposit_rate
-
-        #  Update the environment's cells
-        self.model.environment.cells.update({
-            PheromoneMovementSystem.FOOD_KEY : fcells,
-            PheromoneMovementSystem.HOME_KEY: hcells,
-            GATHER.Gather.RESOURCE_KEY : resource_cells})
+                agent[PheromoneComponent].h_pheromones[pos_id] += self.deposit_rate
