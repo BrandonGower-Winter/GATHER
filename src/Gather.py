@@ -37,34 +37,18 @@ class Gather(Core.Model):
     default_index_names = ['void', 'rock', 'iron', 'gold']
 
     def __init__(self, env_size : int, home_size : int, deposit_rate : float, decay_rate : float, communication_network,
-                 cost : int, cost_frequency : int,
+                 cost : int, cost_frequency : int,  environment_mode: int = 0,
                  resource_distribution : list = None, index_names : list = None, seed : int = None):
         """ Initializes class and creates GridWorld Environment of width AND height = size.
             Adds RESOURCES and HOME cell to the environment '"""
-        super().__init__(seed = seed if seed is None else Gather.seed)
+        super().__init__(seed = seed if seed is not None else Gather.seed)
         self.environment = GridWorld(self, env_size, env_size)
 
         self.resource_distribution = Gather.default_resource_distribution if resource_distribution is None else resource_distribution
         self.index_names = Gather.default_index_names if index_names is None else index_names
 
-        # Create summed weight distribution for resources
-        # Note: This assumes weights sum to 1.0 (Will need to normalize values if that cannot safely be assumed)
-        summed_weights = []
-        total = 0.0
-        for weight in self.resource_distribution:
-            total += weight
-            summed_weights.append(total)
-
-        # Create base resources to that the active resources will reset to
-        temp_ref = self
-        def base_resource_generator(pos, cells):
-            r = temp_ref.random.random()
-            for i, v in enumerate(summed_weights):
-                if r < v:
-                    return i + 1
-            return len(summed_weights)
-
-        self.environment.add_cell_component('base_' + Gather.RESOURCE_KEY, base_resource_generator)
+        # Create resources based on environment mode
+        self.create_environment_resources(environment_mode)
 
         # Create home (base) of size home_size x home_size
         self.home_locs = []
@@ -88,6 +72,38 @@ class Gather(Core.Model):
         self.systems.add_system(Agents.PheromoneMovementSystem('PMS', self, communication_network))
         self.systems.add_system(Agents.PheromoneDepositSystem('PDS', self, deposit_rate, decay_rate))
         self.systems.add_system(Agents.CostSystem('CS', self, cost, cost_frequency))
+
+    def create_environment_resources(self, mode: int):
+        # Create summed weight distribution for resources
+        # Note: This assumes weights sum to 1.0 (Will need to normalize values if that cannot safely be assumed)
+        summed_weights = []
+        total = 0.0
+        for weight in self.resource_distribution:
+            total += weight
+            summed_weights.append(total)
+
+        # Create base resources to that the active resources will reset to
+        if mode == Gather.ENV_RANDOM:
+            temp_ref = self
+            def base_resource_generator(pos, cells):
+                r = temp_ref.random.random()
+                for i, v in enumerate(summed_weights):
+                    if r < v:
+                        return i + 1
+                return len(summed_weights)
+
+            generator = base_resource_generator
+
+        elif mode == Gather.ENV_CLUSTERED:
+            from PIL import Image
+            generator = np.asarray(Image.open('./resources/cluster.png').convert('L')) / 255.0
+            generator = generator.flatten()
+            generator = np.where(generator > 0.0, 2, 1)
+        else:
+            generator = None
+
+        self.environment.add_cell_component('base_' + Gather.RESOURCE_KEY, generator)
+
 
     def reset(self):
         """ Resets the environment. """

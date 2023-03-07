@@ -108,7 +108,8 @@ def main():
     communication_network  = get_communication_network(args.network)
 
     # Create Model
-    model  = Gather(args.size, args.nest, args.deposit, args.decay, communication_network, COST, COST_FREQUENCY)
+    model  = Gather(args.size, args.nest, args.deposit, args.decay, communication_network, COST, COST_FREQUENCY,
+                    args.mode, seed = args.seed)
 
     # Add Agents to the environment
     for i in range(args.agents):
@@ -117,9 +118,8 @@ def main():
     # Run Model
     #model.execute(ITERATIONS)
     agent_val = len(model.resource_distribution) + 1
-    for i in range(ITERATIONS):
+    for i in range(args.iterations):
         model.execute()
-
         wealth_arr = np.array([agent[ResourceComponent].wealth for agent in model.environment])
         print(f'\r{i+1}/{ITERATIONS} - Collected: {model.environment[EnvResourceComponent].resources} Gini: {gini(wealth_arr)}',
               file=sys.stdout, flush=True, end='\r')
@@ -131,10 +131,7 @@ def main():
 
             for agent in model.environment:
                 x, y = agent[ENV.PositionComponent].xy()
-                if agent[ModeComponent].home:
-                    img[y][x] = agent_val
-                else:
-                    img[y][x] = agent_val + 1
+                img[y][x] = agent_val
 
             ax.imshow(img, cmap='Set1')
             fig.savefig(f'./output/iteration_{i}.png')
