@@ -36,8 +36,8 @@ class Gather(Core.Model):
     default_resource_distribution = [0.7, 0.15, 0.1, 0.05]
     default_index_names = ['void', 'rock', 'iron', 'gold']
 
-    def __init__(self, env_size : int, home_size : int, deposit_rate : float, decay_rate : float, communication_network,
-                 cost : int, cost_frequency : int,  environment_mode: int = 0,
+    def __init__(self, env_size : int, home_size : int, deposit_rate : float, hdecay_rate : float, fdecay_rate : float,
+                 communication_network, cost : int, cost_frequency : int,  environment_mode: int = 0,
                  resource_distribution : list = None, index_names : list = None, seed : int = None):
         """ Initializes class and creates GridWorld Environment of width AND height = size.
             Adds RESOURCES and HOME cell to the environment '"""
@@ -70,7 +70,7 @@ class Gather(Core.Model):
         # Add Systems
         # self.systems.add_system(Agents.RandomMovementSystem('RMS', self))
         self.systems.add_system(Agents.PheromoneMovementSystem('PMS', self, communication_network))
-        self.systems.add_system(Agents.PheromoneDepositSystem('PDS', self, deposit_rate, decay_rate))
+        self.systems.add_system(Agents.PheromoneDepositSystem('PDS', self, deposit_rate, hdecay_rate, fdecay_rate))
         self.systems.add_system(Agents.CostSystem('CS', self, cost, cost_frequency))
 
     def create_environment_resources(self, mode: int):

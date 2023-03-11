@@ -87,7 +87,7 @@ class CostSystem(Core.System):
 
 class PheromoneMovementSystem(Core.System):
 
-    def __init__(self, id: str, model: Core.Model, communication_network, agent_random_chance : float = 0.05):
+    def __init__(self, id: str, model: Core.Model, communication_network, agent_random_chance : float = 0.0):
         super().__init__(id, model)
         self.agent_random_chance = agent_random_chance
         self.model.environment.add_component(PheromoneCommunicationComponent(self.model.environment, self.model,
@@ -124,7 +124,6 @@ class PheromoneMovementSystem(Core.System):
             elif self.model.random.random() < self.agent_random_chance:  # Random Move
                 new_pos = self.model.random.choice(candidate_cells)
             else:
-
                 # Calculate agent's pheromone representation
                 fcells = np.zeros(self.model.environment.width ** 2)
                 hcells = np.zeros(self.model.environment.width ** 2)
@@ -164,20 +163,20 @@ class PheromoneMovementSystem(Core.System):
 
 class PheromoneDepositSystem(Core.System):
 
-    def __init__(self, id : str, model : Core.Model, deposit_rate : float, decay_rate : float):
+    def __init__(self, id : str, model : Core.Model, deposit_rate : float, hdecay_rate : float, fdecay_rate : float):
         super().__init__(id, model)
 
         self.deposit_rate = deposit_rate  # TODO: Could be interesting if the deposit rate was based on the agent's success
-        self.decay_rate = 1.0 - decay_rate
-
+        self.hdecay_rate = 1.0 - hdecay_rate
+        self.fdecay_rate = 1.0 - fdecay_rate
 
     def execute(self):
         resource_cells = self.model.environment.cells[GATHER.Gather.RESOURCE_KEY].to_numpy()
 
         for agent in self.model.environment:
 
-            agent[PheromoneComponent].f_pheromones *= self.decay_rate
-            agent[PheromoneComponent].h_pheromones *= self.decay_rate
+            agent[PheromoneComponent].f_pheromones *= self.fdecay_rate
+            agent[PheromoneComponent].h_pheromones *= self.hdecay_rate
 
             agent[PheromoneComponent].f_pheromones[agent[PheromoneComponent].f_pheromones < 0.001] = 0.0
             agent[PheromoneComponent].h_pheromones[agent[PheromoneComponent].h_pheromones < 0.001] = 0.0

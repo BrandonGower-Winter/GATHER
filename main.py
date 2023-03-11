@@ -12,7 +12,8 @@ NEST_SIZE = 4
 NUM_AGENTS = 100
 
 DEPOSIT_RATE = 0.25
-DECAY_RATE = 0.1
+FDECAY_RATE = 0.1
+HDECAY_RATE = 0.1
 
 ITERATIONS = 1000
 
@@ -89,7 +90,8 @@ def parseArgs():
                         default=NEST_SIZE, type=int)
     parser.add_argument('-a', '--agents', help='The number of agents to initialize.', default=NUM_AGENTS, type=int)
     parser.add_argument('--deposit', help='The amount of pheromone dropped by the agents.', default=DEPOSIT_RATE, type=float)
-    parser.add_argument('--decay', help='The rate at which the pheromone evaporates.', default=DECAY_RATE, type=float)
+    parser.add_argument('--hdecay', help='The rate at which the pheromone evaporates.', default=HDECAY_RATE, type=float)
+    parser.add_argument('--fdecay', help='The rate at which the pheromone evaporates.', default=FDECAY_RATE, type=float)
     parser.add_argument('-i', '--iterations', help='How long the simulation should run for.',
                         default=ITERATIONS, type=int)
     parser.add_argument('--mode', help='What mode the environment should be initialized to', default=ENV_MODE, type=int)
@@ -108,8 +110,8 @@ def main():
     communication_network  = get_communication_network(args.network)
 
     # Create Model
-    model  = Gather(args.size, args.nest, args.deposit, args.decay, communication_network, COST, COST_FREQUENCY,
-                    args.mode, seed = args.seed)
+    model  = Gather(args.size, args.nest, args.deposit, args.hdecay, args.fdecay, communication_network,
+                    COST, COST_FREQUENCY, args.mode, seed = args.seed)
 
     # Add Agents to the environment
     for i in range(args.agents):

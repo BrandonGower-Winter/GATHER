@@ -2,8 +2,6 @@ numpy
 Cython
 matplotlib
 pandas
-mysqlclient
-optuna
 scipy
 scikit-posthocs
 ECAgent
