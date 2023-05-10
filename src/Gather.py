@@ -15,8 +15,8 @@ import numpy as np
     5. Information Sharing
     6. Loggers"""
 
-class Gather(Core.Model):
 
+class Gather(Core.Model):
     """ Model Class of GATHER ABM.
         Abiding by the ECS design paradigm, the class is just a container for the systems and agents that will
         execute / occupy a simulation. """
@@ -33,15 +33,17 @@ class Gather(Core.Model):
 
     seed = None
 
-    default_resource_distribution = [0.7, 0.15, 0.1, 0.05]
+    default_resource_distribution = [0.7, 0.15, 0.1, 0.05]  # [0.0, 1.0, 0.0, 0.0]  #
     default_index_names = ['void', 'rock', 'iron', 'gold']
 
-    def __init__(self, env_size : int, home_size : int, deposit_rate : float, hdecay_rate : float, fdecay_rate : float,
-                 communication_network, cost : int, cost_frequency : int,  environment_mode: int = 0,
-                 resource_distribution : list = None, index_names : list = None, seed : int = None):
+    def __init__(self, env_size: int, home_size: int, deposit_rate: float, hdecay_rate: float, fdecay_rate: float,
+                 communication_network, cost: int, cost_frequency: int,  random_chance: float = 0.0,
+                 gamma: float = 0.99, eta: float = 0.1, environment_mode: int = 0, resource_distribution: list = None,
+                 index_names: list = None, seed: int = None, move_mode: str = None, detect: bool = False,
+                 center: bool = False):
         """ Initializes class and creates GridWorld Environment of width AND height = size.
             Adds RESOURCES and HOME cell to the environment '"""
-        super().__init__(seed = seed if seed is not None else Gather.seed)
+        super().__init__(seed=seed if seed is not None else Gather.seed)
         self.environment = GridWorld(self, env_size, env_size)
 
         self.resource_distribution = Gather.default_resource_distribution if resource_distribution is None else resource_distribution
@@ -52,7 +54,12 @@ class Gather(Core.Model):
 
         # Create home (base) of size home_size x home_size
         self.home_locs = []
-        home_x, home_y = self.random.randrange(home_size, env_size - home_size), self.random.randrange(home_size, env_size - home_size)
+        if center:
+            c_coord = env_size // 2 - home_size // 2
+            home_x, home_y = c_coord, c_coord
+        else:
+            home_x, home_y = self.random.randrange(0, env_size - home_size), self.random.randrange(0, env_size - home_size)
+
         col_loc = self.environment.cells.columns.get_loc('base_' + Gather.RESOURCE_KEY)
         for x in range(home_size):
             for y in range(home_size):
@@ -68,9 +75,20 @@ class Gather(Core.Model):
                                                            resource_distribution, index_names))
 
         # Add Systems
-        # self.systems.add_system(Agents.RandomMovementSystem('RMS', self))
-        self.systems.add_system(Agents.PheromoneMovementSystem('PMS', self, communication_network))
-        self.systems.add_system(Agents.PheromoneDepositSystem('PDS', self, deposit_rate, hdecay_rate, fdecay_rate))
+        if move_mode == 'RMS':
+            self.systems.add_system(Agents.RandomMovementSystem('RMS', self))
+        elif move_mode == 'PMS':
+            self.systems.add_system(Agents.PheromoneMovementSystem('PMS', self, communication_network,
+                                                                   agent_random_chance=random_chance, detect=detect))
+        elif move_mode == 'QLS':
+            self.systems.add_system(Agents.PheromoneMovementSystem('PMS', self, communication_network,
+                        agent_random_chance=random_chance, move_mode=Agents.PheromoneMovementSystem.MOVE_MODE_ARGMAX,
+                        detect=detect))
+
+        self.systems.add_system(Agents.PheromoneDepositSystem('PDS', self, deposit_rate, hdecay_rate, fdecay_rate,
+            gamma=gamma, eta=eta, move_mode=Agents.PheromoneDepositSystem.MOVE_MODE_PROBABILITY if move_mode != 'QLS'
+                            else Agents.PheromoneDepositSystem.MOVE_MODE_ARGMAX))
+
         self.systems.add_system(Agents.CostSystem('CS', self, cost, cost_frequency))
 
     def create_environment_resources(self, mode: int):
@@ -104,10 +122,19 @@ class Gather(Core.Model):
 
         self.environment.add_cell_component('base_' + Gather.RESOURCE_KEY, generator)
 
-
     def reset(self):
         """ Resets the environment. """
+        # Resources
         self.environment.cells[Gather.RESOURCE_KEY] = self.environment.cells['base_' + Gather.RESOURCE_KEY].copy()
+        self.environment[EnvResourceComponent].resources = 0
+
+        # Positions and agent resources
+        for agent in self.environment:
+            self.environment.move_to(agent, *self.random.choice(self.home_locs))
+            agent[Agents.ModeComponent].home = False
+            agent[Agents.ResourceComponent].wealth = 0
+            agent[Agents.ResourceComponent].resources = 0
+
 
 class EnvResourceComponent(Core.Component):
     """ Class that stores data related to the Gather.RESOURCE_KEY layer
@@ -121,7 +148,7 @@ class EnvResourceComponent(Core.Component):
             in the resource_distribution variable.
         """
     def __init__(self, agent : Core.Agent, model: Core.Model, env_size : int, home_size : int, home_x : int, home_y : int,
-                 resource_distribution : list, index_names : list):
+                 resource_distribution : list, index_names: list):
 
         super().__init__(agent, model)
         self.env_size = env_size
