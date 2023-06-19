@@ -56,11 +56,29 @@ TODO
 
 ## Running Multiple Simulations at Once:
 
-TODO
+To run a batch of simulations, use:
+```shell
+./batchrunner.sh OUTPUT_DIR "ARGS"
+```
+where `OUTPUT_DIR` is where the output for each simulation should
+be written to (grouped by seed) and `"ARGS"` is a string containing
+the optional parameters that each simulation in the batch will be run with.
+
+For example, `"--hdecay .01 --fdecay .01 --agents 100"` will run
+all simulations in the batch with an `hdecay` and `fdecay` of `0.01`
+with a populations of `100` agents.
+
+**Note**: You must surround `ARGS` with double quotes `" "`. 
 
 ## Processing Batch Simulations:
 
-TODO
+Use `batch2cv.py` as follows:
+```python
+python batch2csv.py -i INPUT_DIR -o OUTPUT_DIR
+```
+Where `INPUT_DIR` is the directory containing the outputs produced 
+by a batch simulation and `OUTPUT_DIR` is the directory where the
+CSV files will be written to. 
 
 ## Plotting Graphs:
 

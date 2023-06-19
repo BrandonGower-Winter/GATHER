@@ -2,6 +2,7 @@ numpy
 Cython
 matplotlib
 pandas
+torch
 scipy
 scikit-posthocs
 ECAgent

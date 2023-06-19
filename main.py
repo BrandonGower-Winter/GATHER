@@ -136,7 +136,7 @@ def main():
     for i in range(args.iterations):
         model.execute()
         wealth_arr = np.array([agent[ResourceComponent].wealth for agent in model.environment])
-        print(f'\r{i+1}/{ITERATIONS} - Collected: {model.environment[EnvResourceComponent].resources} Gini: {gini(wealth_arr)}',
+        print(f'\r{i+1}/{args.iterations} - Collected: {model.environment[EnvResourceComponent].resources} Gini: {gini(wealth_arr)}',
               file=sys.stdout, flush=True, end='\r')
 
         if args.visualize:
@@ -169,7 +169,6 @@ def main():
             ax3.set_ylabel('Y')
 
             fig.suptitle(f'Iteration {i}')
-            #fig.tight_layout(pad=5.0)
             fig.savefig(f'./output/iteration_{i}.png')
             plt.close(fig)
 
